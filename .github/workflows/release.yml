@@ -25,7 +25,7 @@ jobs:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           $newVer = & "${{ github.workspace }}\.github\scripts\bump_version.ps1" -VersionFile "${{ github.workspace }}\VERSION"
-          if ($LASTEXITCODE -ne 0) { throw "version bump failed" }
+          if ($LASTEXITCODE) { throw "version bump failed" }
           "NEW_VERSION=$newVer" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
           Write-Host "new version: $newVer"
 
