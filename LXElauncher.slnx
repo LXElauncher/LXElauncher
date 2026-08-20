@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="LXElauncher.vcxproj" Id="616d52c1-61ce-48be-8271-1a69323f7869" />
+</Solution>

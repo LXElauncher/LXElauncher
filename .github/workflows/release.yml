@@ -1,0 +1,110 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Bump version, build Release, publish
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bump version
+        id: bump
+        shell: pwsh
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          $newVer = & "${{ github.workspace }}\.github\scripts\bump_version.ps1" -VersionFile "${{ github.workspace }}\VERSION"
+          if ($LASTEXITCODE -ne 0) { throw "version bump failed" }
+          "NEW_VERSION=$newVer" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding ascii
+          Write-Host "new version: $newVer"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 1) {
+            git commit -m "chore: bump version to $newVer [skip ci]"
+            git push
+          } else {
+            Write-Host "VERSION unchanged, nothing to commit"
+          }
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: |
+          $nuget = Get-Command nuget -ErrorAction SilentlyContinue
+          if ($nuget) {
+            nuget restore LXElauncher.vcxproj -SolutionDirectory . -NonInteractive
+          } else {
+            Invoke-WebRequest -Uri https://dist.nuget.org/win-x86-commandline/latest/nuget.exe -OutFile "$env:TEMP\nuget.exe"
+            & "$env:TEMP\nuget.exe" restore LXElauncher.vcxproj -SolutionDirectory . -NonInteractive
+          }
+
+      - name: Generate BuildInfo.h from VERSION
+        shell: pwsh
+        run: |
+          & "${{ github.workspace }}\.github\scripts\generate_buildinfo.ps1" -VersionFile "${{ github.workspace }}\VERSION" -OutFile "${{ github.workspace }}\BuildInfo.h"
+
+      - name: Build Release (x64)
+        shell: pwsh
+        run: msbuild LXElauncher.vcxproj /p:Configuration=Release /p:Platform=x64 /m
+
+      - name: Prepare release package
+        shell: pwsh
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.NEW_VERSION }}
+        run: |
+          $ver = $env:NEW_VERSION
+          $out = Join-Path $PWD 'x64\Release'
+          if (-not (Test-Path -LiteralPath (Join-Path $out 'LXElauncher.exe'))) { throw "Build output not found: $out" }
+
+          $appSettings = @{
+            version = $ver
+            title   = 'LXElauncher'
+          } | ConvertTo-Json -Compress
+          Set-Content -LiteralPath (Join-Path $out 'appsettings.json') -Value $appSettings -Encoding UTF8
+
+          New-Item -ItemType Directory -Force -Path (Join-Path $PWD 'release') | Out-Null
+          Compress-Archive -Path (Join-Path $out '*') -DestinationPath (Join-Path $PWD "release\LXElauncher-$ver.zip") -Force
+          Write-Host "packaged release\LXElauncher-$ver.zip"
+
+      - name: Remove pre-existing tag/release (idempotent reruns)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW_VERSION: ${{ steps.bump.outputs.NEW_VERSION }}
+        run: |
+          gh release delete ("v" + $env:NEW_VERSION) --yes --cleanup-tag 2>&1 | Out-Null
+          Write-Host "cleanup done"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.bump.outputs.NEW_VERSION }}
+          name: LXElauncher v${{ steps.bump.outputs.NEW_VERSION }}
+          body: |
+            ## LXElauncher v${{ steps.bump.outputs.NEW_VERSION }}
+
+            Auto-built from commit `${{ github.sha }}` on branch `${{ github.ref_name }}`.
+
+            - 双击 `LXElauncher.exe` 即可运行（首次使用需已安装 WebView2 Runtime）。
+            - 完整绿色版：下载 `LXElauncher-${{ steps.bump.outputs.NEW_VERSION }}.zip`。
+          files: |
+            release/LXElauncher-${{ steps.bump.outputs.NEW_VERSION }}.zip
+            x64/Release/LXElauncher.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

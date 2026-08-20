@@ -1,0 +1,8 @@
+/* MiSans-Regular (免费商用) — 思源等宽字体的衍生小米字体 */
+@font-face {
+  font-family: "MiSans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./MiSans-Regular.ttf") format("truetype");
+}
