@@ -216,11 +216,16 @@
     </Content>
   </ItemGroup>
   <!-- Build 后把 Font Awesome webfonts/ 及其他 vendor 子目录整个复制过去 -->
+  <ItemGroup>
+    <WebAppVendorFiles Include="$(ProjectDir)webapp\vendor\**\*" Condition="Exists('$(ProjectDir)webapp\vendor')" />
+    <WebAppImgFiles Include="$(ProjectDir)webapp\img\**\*" Condition="Exists('$(ProjectDir)webapp\img')" />
+  </ItemGroup>
   <Target Name="CopyWebAppVendor" AfterTargets="AfterBuild">
-    <Exec Command="robocopy &quot;$(ProjectDir)webapp\vendor&quot; &quot;$(TargetDir)webapp\vendor&quot; /E /R:1 /W:1 /NFL /NDL /NJH /NJS &amp; if errorlevel 8 exit /b 1 &amp; exit /b 0" Condition="Exists('$(ProjectDir)webapp\vendor')" />
-    <Exec Command="robocopy &quot;$(ProjectDir)webapp\img&quot; &quot;$(TargetDir)webapp\img&quot; /E /R:1 /W:1 /NFL /NDL /NJH /NJS &amp; if errorlevel 8 exit /b 1 &amp; exit /b 0" Condition="Exists('$(ProjectDir)webapp\img')" />
+    <Copy SourceFiles="@(WebAppVendorFiles)" DestinationFiles="@(WebAppVendorFiles->'$(TargetDir)webapp\vendor\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(WebAppImgFiles)" DestinationFiles="@(WebAppImgFiles->'$(TargetDir)webapp\img\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <!-- 拷贝 aria2c.exe 到输出目录，便于下载使用多线程 -->
-    <Exec Command="copy /Y &quot;$(ProjectDir)tools\aria2c.exe&quot; &quot;$(TargetDir)aria2c.exe&quot; &gt;nul 2&gt;&amp;1 &amp; echo aria2c copied or not found" Condition="Exists('$(ProjectDir)tools\aria2c.exe')" />
+    <Copy SourceFiles="$(ProjectDir)tools\aria2c.exe" DestinationFiles="$(TargetDir)aria2c.exe" SkipUnchangedFiles="true" Condition="Exists('$(ProjectDir)tools\aria2c.exe')" />
+    <Message Text="aria2c copied or not found" Importance="high" />
   </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

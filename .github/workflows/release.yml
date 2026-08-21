@@ -48,10 +48,10 @@ jobs:
         run: |
           $nuget = Get-Command nuget -ErrorAction SilentlyContinue
           if ($nuget) {
-            nuget restore LXElauncher.vcxproj -SolutionDirectory . -NonInteractive
+            nuget restore LXElauncher.slnx -SolutionDirectory . -NonInteractive
           } else {
             Invoke-WebRequest -Uri https://dist.nuget.org/win-x86-commandline/latest/nuget.exe -OutFile "$env:TEMP\nuget.exe"
-            & "$env:TEMP\nuget.exe" restore LXElauncher.vcxproj -SolutionDirectory . -NonInteractive
+            & "$env:TEMP\nuget.exe" restore LXElauncher.slnx -SolutionDirectory . -NonInteractive
           }
 
       - name: Generate BuildInfo.h from VERSION
@@ -89,7 +89,8 @@ jobs:
           NEW_VERSION: ${{ steps.bump.outputs.NEW_VERSION }}
         run: |
           gh release delete ("v" + $env:NEW_VERSION) --yes --cleanup-tag 2>&1 | Out-Null
-          Write-Host "cleanup done"
+          if ($LASTEXITCODE -ne 0) { Write-Host "no existing release/tag to clean up" }
+          exit 0
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
